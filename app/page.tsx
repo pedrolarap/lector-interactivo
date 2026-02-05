@@ -28,29 +28,48 @@ export default function LectorDeRailway() {
   }, []);
 
   // 2. Función para leer palabra individual y mostrar gramática
-  const leerYAnalizar = (word: string) => {
-    if (!synthRef.current) return;
-    synthRef.current.cancel();
+  const leerYAnalizar = async (word: string) => {
+  if (!synthRef.current) return;
+  synthRef.current.cancel();
 
-    const ut = new SpeechSynthesisUtterance(word);
-    ut.lang = 'en-US'; 
-    synthRef.current.speak(ut);
+  // 1. Voz
+  const ut = new SpeechSynthesisUtterance(word);
+  ut.lang = 'en-US';
+  synthRef.current.speak(ut);
 
-    // Diccionario simple para el ejemplo
-    const wordClean = word.toLowerCase().replace(/[^a-z]/g, "");
-    const mockDict: any = {
-      "leo": { t: "Proper Noun", tr: "Leo" },
-      "slumped": { t: "Verb", tr: "Desplomarse" },
-      "spectacles": { t: "Noun", tr: "Gafas/Anteojos" },
-      "magic": { t: "Noun", tr: "Magia" }
-    };
+  // Limpiar la palabra de puntos/comas
+  const wordClean = word.toLowerCase().replace(/[^a-z]/g, "");
 
-    setAnalisis({
-      palabra: word,
-      tipo: mockDict[wordClean]?.t || "Common Word",
-      trad: mockDict[wordClean]?.tr || "Check dictionary"
-    });
-  };
+  try {
+    // 2. Consultar API de Diccionario
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${wordClean}`);
+    const data = await response.json();
+
+    if (data && data[0]) {
+      const primeraDefinicion = data[0].meanings[0];
+      
+      setAnalisis({
+        palabra: wordClean,
+        tipo: primeraDefinicion.partOfSpeech, // Ej: "noun", "verb"
+        trad: "Buscando traducción..." // La API de diccionario está en inglés
+      });
+
+      // 3. Traducción rápida (Opcional: Usar Google Translate o MyMemory API)
+      const resTrad = await fetch(`https://api.mymemory.translated.net/get?q=${wordClean}&langpair=en|es`);
+      const dataTrad = await resTrad.json();
+      
+      setAnalisis(prev => ({
+        ...prev,
+        trad: dataTrad.responseData.translatedText
+      }));
+
+    } else {
+      setAnalisis({ palabra: word, tipo: "Not found", trad: "No encontrada" });
+    }
+  } catch (error) {
+    console.error("Error en la API:", error);
+  }
+};
 
   // 3. Funciones de lectura general
   const leerTodo = () => {
