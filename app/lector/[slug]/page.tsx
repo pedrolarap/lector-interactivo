@@ -59,14 +59,14 @@ export default function LectorFinal() {
   // --- AUDIO PROXY PARA HEBREO (CON LIMPIEZA DE BUFFER) ---
   const reproducirAudioGoogle = (textoParaLeer: string, idioma: string, callbackFinal?: () => void) => {
     const textoLimpio = textoParaLeer.replace(/[\u0591-\u05C7]/g, "");
-    const url = `/api/proxy-audio?q=${encodeURIComponent(textoLimpio)}&tl=${idioma}`;
+    const url = `/api/proxy-audio?q=${encodeURIComponent(textoLimpio)}&tl=${idioma}&cb=${Date.now()}`;
     
     // 1. Detenemos cualquier audio que esté sonando actualmente
-    if (audioPalabraRef.current) {
-      audioPalabraRef.current.pause();
-      audioPalabraRef.current.src = ""; // Esto limpia el cache del audio anterior
-      audioPalabraRef.current.load();  // Fuerza al navegador a liberar el recurso
-    }
+   if (audioPalabraRef.current) {
+    audioPalabraRef.current.pause();
+    audioPalabraRef.current.src = ""; 
+    audioPalabraRef.current.load();
+  }
 
     // 2. Creamos la nueva instancia
     const nuevoAudio = new Audio(url);
