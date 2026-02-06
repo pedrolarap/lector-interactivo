@@ -2,18 +2,29 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 
+// 1. Definimos la estructura de lo que esperamos de la API
+interface Texto {
+  id: number;
+  titulo: string;
+  slug: string;
+  contenido?: string;
+  idioma_code?: string;
+  imagen_url?: string;
+}
+
 export default function CategoriaPage({ params }: { params: Promise<{ slug: string }> }) {
-  // En tu caso, el 'slug' de la URL es el código del idioma (ej: 'en', 'he')
   const { slug: idiomaId } = use(params); 
-  const [textos, setTextos] = useState([]);
+  
+  // 2. Le decimos a useState que manejará un array de tipo Texto
+  const [textos, setTextos] = useState<Texto[]>([]);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     const fetchTextos = async () => {
       try {
-        // Llamamos a tu API de categorías usando el código del idioma
         const res = await fetch(`/api/categorias/${idiomaId}`);
-        const data = await res.json();
+        // 3. Le indicamos a TS que los datos vienen con esa forma
+        const data = (await res.json()) as Texto[];
         
         if (Array.isArray(data)) {
           setTextos(data);
@@ -46,19 +57,20 @@ export default function CategoriaPage({ params }: { params: Promise<{ slug: stri
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {textos.map((texto: any) => (
+            {textos.map((texto) => (
               <article key={texto.id} className="bg-white rounded-3xl p-8 shadow-sm hover:shadow-xl transition-all border border-slate-100 flex flex-col">
                 <div className="flex-1">
-                  <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full uppercase">
-                    {texto.idioma_code}
-                  </span>
+                  {texto.idioma_code && (
+                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full uppercase">
+                      {texto.idioma_code}
+                    </span>
+                  )}
                   <h2 className="text-2xl font-bold text-slate-800 mt-4 mb-4 leading-tight">
                     {texto.titulo}
                   </h2>
                 </div>
 
-                {/* --- AQUÍ USAMOS EL SLUG DEL TEXTO PARA IR AL LECTOR --- */}
-                <Link href={`/lector/${texto.slug}`}>
+                <Link href={`/lector/${texto.slug || texto.id}`}>
                   <button className="w-full mt-6 py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-indigo-600 transition-colors">
                     Abrir lectura
                   </button>
