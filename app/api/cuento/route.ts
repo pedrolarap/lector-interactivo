@@ -3,7 +3,6 @@ import mysql from 'mysql2/promise';
 
 export async function GET() {
   try {
-    // Creamos la conexión usando las variables que pusimos en el .env.local
     const connection = await mysql.createConnection({
       host: process.env.MYSQLHOST,
       user: process.env.MYSQLUSER,
@@ -12,20 +11,20 @@ export async function GET() {
       port: Number(process.env.MYSQLPORT),
     });
 
-    // Consultamos el cuento (el último que hayas subido)
-    const [rows]: any = await connection.execute(
-      'SELECT titulo, contenido FROM cuentos ORDER BY id DESC LIMIT 1'
-    );
+    // Usamos UNION para traer datos de ambas tablas en una sola lista
+    // IMPORTANTE: Ambas tablas deben tener columnas compatibles (id, titulo, contenido)
+    const [rows]: any = await connection.execute(`
+      SELECT id, titulo, contenido, 'ingles' as tabla FROM cuentos
+      UNION
+      SELECT id, titulo, contenido, 'hebreo' as tabla FROM hebreo
+      ORDER BY id DESC
+    `);
     
     await connection.end();
 
-    if (rows.length === 0) {
-      return NextResponse.json({ error: "No hay cuentos" }, { status: 404 });
-    }
-
-    return NextResponse.json(rows[0]);
+    return NextResponse.json(rows);
   } catch (error) {
     console.error("Error en DB:", error);
-    return NextResponse.json({ error: "Error de conexión" }, { status: 500 });
+    return NextResponse.json({ error: "Error al unir las tablas" }, { status: 500 });
   }
 }

@@ -1,115 +1,83 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
-export default function LectorDeRailway() {
-  const [datos, setDatos] = useState({ titulo: "Cargando...", contenido: "" });
-  const [palabras, setPalabras] = useState<string[]>([]);
-  const [analisis, setAnalisis] = useState({ palabra: "-", tipo: "-", trad: "-" });
-  const synthRef = useRef<SpeechSynthesis | null>(null);
+export default function Home() {
+  const [destacados, setDestacados] = useState([]);
+  const [idiomas] = useState([
+    { id: 'he', name: 'Hebreo', icon: '🇮🇱' },
+    { id: 'el', name: 'Griego', icon: '🇬🇷' },
+    { id: 'en', name: 'Inglés', icon: '🇺🇸' },
+    { id: 'fr', name: 'Francés', icon: '🇫🇷' }
+  ]);
 
-  // 1. Cargar datos de la base de datos al abrir la página
   useEffect(() => {
-    synthRef.current = window.speechSynthesis;
-    
-    const traerDatos = async () => {
-      try {
-        const respuesta = await fetch('/api/cuento');
-        const data = await respuesta.json();
-        if (data.contenido) {
-          setDatos({ titulo: data.titulo, contenido: data.contenido });
-          setPalabras(data.contenido.split(/\s+/));
-        }
-      } catch (error) {
-        console.error("Error cargando el cuento:", error);
-      }
-    };
-
-    traerDatos();
+    // Cargar textos para el Home
+    fetch('/api/textos/destacados')
+      .then(res => {
+        if (!res.ok) throw new Error("Error cargando destacados");
+        return res.json();
+      })
+      .then(data => {
+        // Verificamos que los datos sean un array antes de setear
+        if (Array.isArray(data)) setDestacados(data);
+      })
+      .catch(err => console.error("Error en Home:", err));
   }, []);
 
-  // 2. Función para leer palabra individual y mostrar gramática
-  const leerYAnalizar = async (word: string) => {
-  if (!synthRef.current) return;
-  synthRef.current.cancel();
-
-  // 1. Voz
-  const ut = new SpeechSynthesisUtterance(word);
-  ut.lang = 'en-US';
-  synthRef.current.speak(ut);
-
-  // Limpiar la palabra de puntos/comas
-  const wordClean = word.toLowerCase().replace(/[^a-z]/g, "");
-
-  try {
-    // 2. Consultar API de Diccionario
-    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${wordClean}`);
-    const data = await response.json();
-
-    if (data && data[0]) {
-      const primeraDefinicion = data[0].meanings[0];
-      
-      setAnalisis({
-        palabra: wordClean,
-        tipo: primeraDefinicion.partOfSpeech, // Ej: "noun", "verb"
-        trad: "Buscando traducción..." // La API de diccionario está en inglés
-      });
-
-      // 3. Traducción rápida (Opcional: Usar Google Translate o MyMemory API)
-      const resTrad = await fetch(`https://api.mymemory.translated.net/get?q=${wordClean}&langpair=en|es`);
-      const dataTrad = await resTrad.json();
-      
-      setAnalisis(prev => ({
-        ...prev,
-        trad: dataTrad.responseData.translatedText
-      }));
-
-    } else {
-      setAnalisis({ palabra: word, tipo: "Not found", trad: "No encontrada" });
-    }
-  } catch (error) {
-    console.error("Error en la API:", error);
-  }
-};
-
-  // 3. Funciones de lectura general
-  const leerTodo = () => {
-    const ut = new SpeechSynthesisUtterance(datos.contenido);
-    ut.lang = 'en-US';
-    synthRef.current?.speak(ut);
-  };
-
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 p-6">
-      <main className="flex-1 bg-white p-8 rounded-xl shadow-lg">
-        <h1 className="text-3xl font-bold text-indigo-900 mb-4">{datos.titulo}</h1>
+    <div className="min-h-screen bg-slate-50">
+      {/* Hero Section */}
+      <header className="bg-indigo-900 text-white py-16 px-6 text-center">
+        <h1 className="text-5xl font-extrabold mb-4">Políglota Bíblico</h1>
+        <p className="text-indigo-200 text-xl">Explora lenguas sagradas y literatura clásica.</p>
+      </header>
+
+      {/* Selector de Idiomas Principal */}
+      <nav className="max-w-6xl mx-auto -mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 px-4">
+        {idiomas.map(idioma => (
+          <Link href={`/categoria/${idioma.id}`} key={idioma.id}>
+            <div className="bg-white p-6 rounded-2xl shadow-lg hover:scale-105 transition cursor-pointer text-center border-b-4 border-indigo-500">
+              <span className="text-4xl mb-2 block">{idioma.icon}</span>
+              <span className="font-bold text-slate-700 uppercase tracking-wider">{idioma.name}</span>
+            </div>
+          </Link>
+        ))}
+      </nav>
+
+      {/* Grid de Contenido Visual (Destacados) */}
+      <section className="max-w-6xl mx-auto py-16 px-4">
+        <h2 className="text-2xl font-bold text-slate-800 mb-8">Lecturas Sugeridas</h2>
         
-        <div className="flex gap-2 mb-6">
-          <button onClick={leerTodo} className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">▶️ Leer Cuento</button>
-          <button onClick={() => synthRef.current?.pause()} className="bg-amber-500 text-white px-4 py-2 rounded">⏸️ Pausar</button>
-          <button onClick={() => synthRef.current?.resume()} className="bg-green-500 text-white px-4 py-2 rounded">⏯️ Reanudar</button>
-        </div>
-
-        <div className="text-lg leading-relaxed text-gray-700">
-          {palabras.map((p, i) => (
-            <span 
-              key={i} 
-              onClick={() => leerYAnalizar(p)}
-              className="cursor-pointer hover:bg-indigo-100 hover:text-indigo-700 px-1 rounded transition"
-            >
-              {p}{" "}
-            </span>
-          ))}
-        </div>
-      </main>
-
-      <aside className="w-full md:w-80 md:ml-6 mt-6 md:mt-0 bg-indigo-900 text-white p-6 rounded-xl h-fit sticky top-6">
-        <h2 className="text-xl font-bold mb-4 border-b border-indigo-700 pb-2">Gramática</h2>
-        <div className="space-y-4">
-          <div><p className="text-indigo-300 text-xs uppercase">Palabra</p><p className="text-2xl font-bold">{analisis.palabra}</p></div>
-          <div><p className="text-indigo-300 text-xs uppercase">Tipo</p><p className="text-lg">{analisis.tipo}</p></div>
-          <div><p className="text-indigo-300 text-xs uppercase">Traducción</p><p className="text-xl text-yellow-400 italic">{analisis.trad}</p></div>
-        </div>
-      </aside>
+        {destacados.length === 0 ? (
+          <p className="text-slate-500 text-center py-10">Cargando sugerencias...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {destacados.map((item: any) => (
+              <div key={item.id} className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition group">
+                <div className="h-48 overflow-hidden">
+                  <img 
+                    src={item.imagen_url || 'https://images.unsplash.com/photo-1504052434569-70ad5836ab65?q=80&w=500'} 
+                    alt={item.titulo}
+                    className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
+                  />
+                </div>
+                <div className="p-6">
+                  <span className="text-indigo-500 text-xs font-bold uppercase">{item.idioma_code}</span>
+                  <h3 className="text-xl font-bold mb-3">{item.titulo}</h3>
+                  
+                  {/* CAMBIO CLAVE: Usamos item.slug en lugar de item.id */}
+                  <Link href={`/lector/${item.slug || item.id}`}>
+                    <button className="w-full py-3 bg-slate-100 text-indigo-900 rounded-xl font-bold hover:bg-indigo-600 hover:text-white transition">
+                      Empezar a leer
+                    </button>
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
