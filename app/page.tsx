@@ -84,7 +84,6 @@ export default function Home() {
                   <Link href={`/lector/${item.slug || item.id}`}>
                     <button className="w-full py-3 bg-slate-100 text-indigo-900 rounded-xl font-bold hover:bg-indigo-600 hover:text-white transition">
                       Empezar a leer
-                      Empezar a leer
                     </button>
                   </Link>
                 </div>
