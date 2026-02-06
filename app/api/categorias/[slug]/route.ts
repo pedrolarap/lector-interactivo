@@ -51,7 +51,7 @@ export async function GET(
 
     // 6. Cerramos conexión
     await connection.end();
-        await connection.end();
+        
 
     // 7. Unimos todo en una sola lista para el Frontend
     const respuestaFinal = [...subcats, ...textos];
