@@ -2,8 +2,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 
+// 1. Definimos la forma de los datos para que TypeScript no se queje
+interface Destacado {
+  id: number;
+  titulo: string;
+  slug: string;
+  idioma_code: string;
+  imagen_url?: string;
+}
+
 export default function Home() {
-  const [destacados, setDestacados] = useState([]);
+  // 2. Inicializamos el estado con el tipo correcto <Destacado[]>
+  const [destacados, setDestacados] = useState<Destacado[]>([]);
   const [idiomas] = useState([
     { id: 'he', name: 'Hebreo', icon: '🇮🇱' },
     { id: 'el', name: 'Griego', icon: '🇬🇷' },
@@ -12,17 +22,23 @@ export default function Home() {
   ]);
 
   useEffect(() => {
-    // Cargar textos para el Home
-    fetch('/api/textos/destacados')
-      .then(res => {
-        if (!res.ok) throw new Error("Error cargando destacados");
-        return res.json();
-      })
-      .then(data => {
-        // Verificamos que los datos sean un array antes de setear
-        if (Array.isArray(data)) setDestacados(data);
-      })
-      .catch(err => console.error("Error en Home:", err));
+    const cargarDestacados = async () => {
+      try {
+        const res = await fetch('/api/textos/destacados');
+        if (!res.ok) throw new Error("Error en la respuesta de la API");
+        
+        // 3. Casteamos la respuesta para asegurar la compatibilidad
+        const data = (await res.json()) as Destacado[];
+        
+        if (Array.isArray(data)) {
+          setDestacados(data);
+        }
+      } catch (err) {
+        console.error("Error cargando destacados:", err);
+      }
+    };
+
+    cargarDestacados();
   }, []);
 
   return (
@@ -53,7 +69,7 @@ export default function Home() {
           <p className="text-slate-500 text-center py-10">Cargando sugerencias...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {destacados.map((item: any) => (
+            {destacados.map((item) => (
               <div key={item.id} className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl transition group">
                 <div className="h-48 overflow-hidden">
                   <img 
@@ -65,8 +81,6 @@ export default function Home() {
                 <div className="p-6">
                   <span className="text-indigo-500 text-xs font-bold uppercase">{item.idioma_code}</span>
                   <h3 className="text-xl font-bold mb-3">{item.titulo}</h3>
-                  
-                  {/* CAMBIO CLAVE: Usamos item.slug en lugar de item.id */}
                   <Link href={`/lector/${item.slug || item.id}`}>
                     <button className="w-full py-3 bg-slate-100 text-indigo-900 rounded-xl font-bold hover:bg-indigo-600 hover:text-white transition">
                       Empezar a leer
