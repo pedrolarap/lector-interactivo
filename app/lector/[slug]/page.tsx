@@ -15,6 +15,8 @@ export default function LectorFinal() {
   
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const intervaloRef = useRef<NodeJS.Timeout | null>(null);
+  // REFERENCIA CLAVE: Para evitar que el audio se quede "pegado" en la primera palabra
+  const audioPalabraRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -32,6 +34,7 @@ export default function LectorFinal() {
         }
         
         setTexto(data);
+        // Dividimos por espacios y Maqaf hebreo
         const palabrasArray = data.contenido.split(/[\s\u05BE]+/);
         setPalabras(palabrasArray);
       } catch (err) {
@@ -44,23 +47,37 @@ export default function LectorFinal() {
     return () => {
       synthRef.current?.cancel();
       if (intervaloRef.current) clearInterval(intervaloRef.current);
+      if (audioPalabraRef.current) {
+        audioPalabraRef.current.pause();
+        audioPalabraRef.current.src = "";
+      }
     };
   }, [slug, router]);
 
   const esHebreo = (t: string) => /[\u0590-\u05FF]/.test(t);
 
-  // --- AUDIO PROXY HEBREO ---
+  // --- AUDIO PROXY PARA HEBREO (CON LIMPIEZA DE BUFFER) ---
   const reproducirAudioGoogle = (textoParaLeer: string, idioma: string, callbackFinal?: () => void) => {
     const textoLimpio = textoParaLeer.replace(/[\u0591-\u05C7]/g, "");
     const url = `/api/proxy-audio?q=${encodeURIComponent(textoLimpio)}&tl=${idioma}`;
-    const audio = new Audio(url);
     
-    audio.onended = () => {
+    // 1. Detenemos cualquier audio que esté sonando actualmente
+    if (audioPalabraRef.current) {
+      audioPalabraRef.current.pause();
+      audioPalabraRef.current.src = ""; // Esto limpia el cache del audio anterior
+      audioPalabraRef.current.load();  // Fuerza al navegador a liberar el recurso
+    }
+
+    // 2. Creamos la nueva instancia
+    const nuevoAudio = new Audio(url);
+    audioPalabraRef.current = nuevoAudio;
+
+    nuevoAudio.onended = () => {
       if (callbackFinal) callbackFinal();
     };
 
-    audio.play().catch(e => console.error("Error Audio Proxy:", e));
-    return audio;
+    nuevoAudio.play().catch(e => console.error("Error Audio Proxy:", e));
+    return nuevoAudio;
   };
 
   const analizarPalabra = async (word: string, index: number) => {
@@ -68,10 +85,12 @@ export default function LectorFinal() {
     setIndicePalabraActual(index);
     const isHeb = esHebreo(word);
 
+    // Cancelamos lecturas previas
     if (synthRef.current) synthRef.current.cancel();
     if (intervaloRef.current) clearInterval(intervaloRef.current);
     setLeyendoTodo(false);
 
+    // Reproducción
     if (isHeb) {
       reproducirAudioGoogle(word, 'he');
     } else if (synthRef.current) {
@@ -80,13 +99,14 @@ export default function LectorFinal() {
       synthRef.current.speak(ut);
     }
 
-    // GESTIÓN DE TRADUCCIÓN
+    // Traducción
     try {
       if (isHeb) {
         const resDb = await fetch(`/api/diccionario/${encodeURIComponent(word)}`);
         const dataDb = await resDb.json();
         if (dataDb.traduccion) {
           setAnalisis({ palabra: word, trad: dataDb.traduccion });
+          setCargando(false);
           return;
         }
       }
@@ -113,13 +133,12 @@ export default function LectorFinal() {
 
     if (isHeb) {
       setLeyendoTodo(true);
-      const audio = reproducirAudioGoogle(fullText, 'he', () => {
+      reproducirAudioGoogle(fullText, 'he', () => {
         setLeyendoTodo(false);
         setIndicePalabraActual(null);
         if (intervaloRef.current) clearInterval(intervaloRef.current);
       });
 
-      // Simulación de resaltado para Hebreo (Estimación: 500ms por palabra)
       let idx = 0;
       setIndicePalabraActual(0);
       intervaloRef.current = setInterval(() => {
@@ -129,7 +148,7 @@ export default function LectorFinal() {
         } else {
           if (intervaloRef.current) clearInterval(intervaloRef.current);
         }
-      }, 600); // Ajusta este número según la velocidad del audio de Google
+      }, 650); 
 
     } else {
       if (!synthRef.current) return;
@@ -143,7 +162,6 @@ export default function LectorFinal() {
       };
       ut.onboundary = (event) => {
         if (event.name === 'word') {
-          // Buscamos el índice de la palabra basado en el carácter
           const charIndex = event.charIndex;
           let charCount = 0;
           for (let i = 0; i < words.length; i++) {
@@ -159,36 +177,53 @@ export default function LectorFinal() {
     }
   };
 
-  if (!texto) return <div className="h-screen flex items-center justify-center">Cargando...</div>;
+  if (!texto) return <div className="h-screen flex items-center justify-center font-bold text-indigo-600 animate-pulse">Cargando lectura...</div>;
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-stone-50">
       <main className="flex-1 p-6 md:p-12 lg:p-20 overflow-y-auto">
         <div className="max-w-4xl mx-auto">
-          <button onClick={() => router.back()} className="mb-8 font-bold text-slate-400 hover:text-indigo-600">← VOLVER</button>
+          <button onClick={() => router.back()} className="mb-8 font-black text-slate-400 hover:text-indigo-600 transition-colors uppercase text-xs tracking-widest">
+            ← Volver a Biblioteca
+          </button>
 
-          <div className="flex justify-between items-center mb-10">
-            <h1 className="text-4xl font-black text-slate-800">{texto.titulo}</h1>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
+            <h1 className="text-5xl font-black text-slate-800 tracking-tighter italic">
+              {texto.titulo}
+            </h1>
             <button 
-              onClick={() => leyendoTodo ? (synthRef.current?.cancel(), setLeyendoTodo(false), setIndicePalabraActual(null), intervaloRef.current && clearInterval(intervaloRef.current)) : reproducirConResaltado(texto.contenido, palabras)}
-              className={`p-4 rounded-full shadow-lg text-white font-bold ${leyendoTodo ? 'bg-red-500' : 'bg-indigo-600'}`}
+              onClick={() => {
+                if (leyendoTodo) {
+                   if (synthRef.current) synthRef.current.cancel();
+                   if (audioPalabraRef.current) {
+                      audioPalabraRef.current.pause();
+                      audioPalabraRef.current.src = "";
+                   }
+                   setLeyendoTodo(false);
+                   setIndicePalabraActual(null);
+                   if (intervaloRef.current) clearInterval(intervaloRef.current);
+                } else {
+                  reproducirConResaltado(texto.contenido, palabras);
+                }
+              }}
+              className={`px-8 py-4 rounded-2xl shadow-2xl text-white font-black transition-all transform hover:scale-105 ${leyendoTodo ? 'bg-red-500' : 'bg-indigo-600'}`}
             >
-              {leyendoTodo ? "⏹️ DETENER" : "🔊 LEER TODO"}
+              {leyendoTodo ? "⏹️ DETENER" : "🔊 ESCUCHAR TODO"}
             </button>
           </div>
 
           <div 
-            className={`text-3xl md:text-5xl leading-[2.2] ${esHebreo(texto.contenido) ? 'text-right font-serif' : 'text-left'}`}
+            className={`text-4xl md:text-6xl leading-[2.2] select-none ${esHebreo(texto.contenido) ? 'text-right font-serif' : 'text-left font-light'}`}
             dir={esHebreo(texto.contenido) ? 'rtl' : 'ltr'}
           >
             {palabras.map((p, i) => (
               <span 
                 key={i} 
                 onClick={() => analizarPalabra(p, i)}
-                className={`cursor-pointer px-1.5 py-1 rounded-xl transition-all inline-block m-1
+                className={`cursor-pointer px-2 py-1 rounded-2xl transition-all inline-block m-1
                   ${indicePalabraActual === i 
-                    ? 'bg-yellow-300 text-black scale-110 shadow-md ring-2 ring-yellow-400' 
-                    : 'hover:bg-indigo-100 text-slate-700'}`}
+                    ? 'bg-yellow-300 text-black scale-110 shadow-xl ring-4 ring-yellow-400 z-10' 
+                    : 'hover:bg-indigo-600 hover:text-white text-slate-700'}`}
               >
                 {p}
               </span>
@@ -197,17 +232,28 @@ export default function LectorFinal() {
         </div>
       </main>
 
-      <aside className="w-full md:w-96 bg-slate-900 text-white p-8 border-l border-slate-800 shadow-2xl">
+      <aside className="w-full md:w-[400px] bg-slate-900 text-white p-10 border-l border-slate-800 shadow-2xl">
         <div className="sticky top-10">
-          <h2 className="text-indigo-400 text-xs font-black tracking-widest mb-10 uppercase">Diccionario Inteligente</h2>
-          <div className="space-y-8">
+          <h2 className="text-indigo-400 text-[10px] font-black tracking-[0.4em] mb-12 uppercase">Análisis Gramatical</h2>
+          <div className="space-y-12">
             <section>
-              <span className="text-slate-500 text-[10px] block mb-2">PALABRA SELECCIONADA</span>
-              <p className={`text-5xl font-bold ${esHebreo(analisis.palabra) ? 'text-right' : ''}`}>{analisis.palabra}</p>
+              <span className="text-slate-500 text-[10px] block mb-4 font-bold uppercase">Morfología</span>
+              <p className={`text-6xl font-black tracking-tighter ${esHebreo(analisis.palabra) ? 'text-right' : ''}`}>
+                {analisis.palabra}
+              </p>
             </section>
-            <section className="bg-slate-800/50 p-6 rounded-2xl border border-white/5">
-              <span className="text-slate-500 text-[10px] block mb-2">TRADUCCIÓN</span>
-              {cargando ? <div className="animate-pulse h-6 bg-slate-700 rounded w-3/4"></div> : <p className="text-2xl text-green-400">{analisis.trad}</p>}
+            <section className="bg-white/5 p-8 rounded-[2rem] border border-white/10 backdrop-blur-sm">
+              <span className="text-slate-500 text-[10px] block mb-4 font-bold uppercase">Traducción Literal</span>
+              {cargando ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-slate-700 rounded w-3/4"></div>
+                  <div className="h-4 bg-slate-700 rounded w-1/2"></div>
+                </div>
+              ) : (
+                <p className="text-3xl text-green-400 font-serif leading-tight">
+                  {analisis.trad}
+                </p>
+              )}
             </section>
           </div>
         </div>
